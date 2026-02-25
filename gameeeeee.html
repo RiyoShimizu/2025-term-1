@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Touch Game Particle Edition</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<style>
+body{
+  margin:0;
+  overflow:hidden;
+  background:radial-gradient(circle at center,#222 0%,#000 80%);
+}
+canvas{display:block;}
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas=document.getElementById("gameCanvas");
+const ctx=canvas.getContext("2d");
+
+function resize(){
+  canvas.width=window.innerWidth;
+  canvas.height=window.innerHeight;
+}
+resize();
+window.addEventListener("resize",resize);
+
+/* ================= VARIABLES ================= */
+
+let x=canvas.width/2,y=canvas.height/2;
+let baseRadius=35;
+let radius=baseRadius;
+let angle=0;
+
+let score=0,combo=0;
+let highScore=localStorage.getItem("touchHighScore")||0;
+let newHigh=false;
+
+let message="";
+let messageColor="#ffffff";
+let messageGlow="#ffffff";
+let messageTimer=0;
+
+let timeLeft=30*60;
+let countdown=180;
+let phase="start";
+
+let circleLifeMax=120;
+let circleLife=circleLifeMax;
+
+let currentColor="#BAFFC9";
+
+let shakeTime=0;
+let shakePower=0;
+
+const TAUNTS=["MISS","NOPE","TRY AGAIN","IDIOT","STUPID","SO BAD"];
+
+const PASTEL_COLORS=[
+"#FFB3BA","#FFDFBA","#FFFFBA","#BAFFC9",
+"#BAE1FF","#E3BAFF","#FFD6FF","#C8F7C5",
+"#F7C5CC","#C5D8F7"
+];
+
+let particles=[];
+
+/* ================= PARTICLES ================= */
+
+function createParticles(px,py,color){
+  for(let i=0;i<20;i++){
+    particles.push({
+      x:px,y:py,
+      vx:(Math.random()-0.5)*6,
+      vy:(Math.random()-0.5)*6,
+      life:40,color:color
+    });
+  }
+}
+
+function updateParticles(){
+  for(let i=particles.length-1;i>=0;i--){
+    let p=particles[i];
+    p.x+=p.vx;
+    p.y+=p.vy;
+    p.life--;
+    if(p.life<=0) particles.splice(i,1);
+  }
+}
+
+function drawParticles(){
+  particles.forEach(p=>{
+    ctx.globalAlpha=p.life/40;
+    ctx.fillStyle=p.color;
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,4,0,Math.PI*2);
+    ctx.fill();
+  });
+  ctx.globalAlpha=1;
+}
+
+/* ================= GAME ================= */
+
+function spawnCircle(){
+  x=Math.random()*(canvas.width-100)+50;
+  y=Math.random()*(canvas.height-100)+50;
+  circleLifeMax=120;
+  circleLife=circleLifeMax;
+  radius=baseRadius;
+  currentColor=PASTEL_COLORS[Math.floor(Math.random()*PASTEL_COLORS.length)];
+}
+
+function startGame(){
+  phase="countdown";
+  countdown=180;
+  score=0;
+  combo=0;
+  timeLeft=30*60;
+  newHigh=false;
+}
+
+function handleInput(clientX,clientY){
+
+  if(phase==="start"){
+    if(inButton(clientX,clientY,canvas.width/2,canvas.height/2+80)){
+      startGame();
+    }
+    return;
+  }
+
+  if(phase==="end"){
+    if(inButton(clientX,clientY,canvas.width/2,canvas.height/2+200)){
+      startGame();
+    }
+    return;
+  }
+
+  if(phase!=="playing") return;
+
+  const dx=clientX-x;
+  const dy=clientY-y;
+  const dist=Math.sqrt(dx*dx+dy*dy);
+
+  if(dist<radius){
+    score+=1+combo;
+    combo++;
+
+    message="HIT";
+    messageColor="#00ff88";
+    messageGlow="#00ff88";
+    messageTimer=20;
+
+    createParticles(x,y,currentColor);
+    spawnCircle();
+  }else{
+    score=Math.max(0,score-2);
+    combo=0;
+
+    message=TAUNTS[Math.floor(Math.random()*TAUNTS.length)];
+    messageColor="#ff4444";
+    messageGlow="#ff0000";
+    messageTimer=30;
+
+    shakeTime=20;
+    shakePower=15;
+  }
+}
+
+function inButton(px,py,bx,by){
+  return(px>bx-140&&px<bx+140&&py>by-50&&py<by+50);
+}
+
+canvas.addEventListener("mousedown",e=>handleInput(e.clientX,e.clientY));
+canvas.addEventListener("touchstart",e=>{
+  e.preventDefault();
+  const t=e.touches[0];
+  handleInput(t.clientX,t.clientY);
+});
+
+/* ================= UI ================= */
+
+function drawNeonButton(text,x,y){
+  let pulse=1+Math.sin(Date.now()*0.005)*0.05;
+
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.scale(pulse,pulse);
+
+  ctx.strokeStyle="#ff69b4";
+  ctx.lineWidth=4;
+  ctx.shadowColor="#ff69b4";
+  ctx.shadowBlur=30;
+  ctx.strokeRect(-140,-50,280,100);
+
+  ctx.fillStyle="#ff69b4";
+  ctx.shadowColor="#ff69b4";
+  ctx.shadowBlur=25;
+
+  ctx.font="bold 40px Arial";
+  ctx.textAlign="center";
+  ctx.textBaseline="middle";
+  ctx.fillText(text,0,0);
+
+  ctx.restore();
+}
+
+function drawStartScreen(){
+  ctx.textAlign="center";
+
+  ctx.font="bold 80px Impact";
+  ctx.fillStyle="#ffffff";
+  ctx.shadowColor="#ff69b4";
+  ctx.shadowBlur=30;
+  ctx.fillText("TOUCH GAME",canvas.width/2,canvas.height/3);
+
+  ctx.font="bold 40px Arial";
+  ctx.fillStyle="#ff69b4";
+  ctx.fillText("HIGH SCORE: "+highScore,
+  canvas.width/2,canvas.height/3+100);
+
+  drawNeonButton("START",canvas.width/2,canvas.height/2+80);
+}
+
+function drawEndScreen(){
+  ctx.font="bold 100px Impact";
+  ctx.textAlign="center";
+  ctx.fillStyle="#ffffff";
+  ctx.fillText("GAME OVER",canvas.width/2,canvas.height/2-120);
+
+  ctx.font="bold 60px Arial";
+  ctx.fillText(score,canvas.width/2,canvas.height/2-40);
+
+  if(newHigh){
+    ctx.font="bold 50px Arial";
+    ctx.fillStyle="#ff69b4";
+    ctx.shadowColor="#ff69b4";
+    ctx.shadowBlur=30;
+    ctx.fillText("NEW HIGH SCORE!",canvas.width/2,canvas.height/2+40);
+  }
+
+  drawNeonButton("RESTART",canvas.width/2,canvas.height/2+200);
+}
+
+/* ================= LOOP ================= */
+
+function gameLoop(){
+
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  if(shakeTime>0){
+    const dx=(Math.random()-0.5)*shakePower;
+    const dy=(Math.random()-0.5)*shakePower;
+    ctx.save();
+    ctx.translate(dx,dy);
+    shakeTime--;
+  }else{
+    ctx.save();
+  }
+
+  if(phase==="start") drawStartScreen();
+
+  else if(phase==="countdown"){
+    countdown--;
+    messageColor="#ffffff";
+    messageGlow="#ffffff";
+
+    if(countdown>120)message="3";
+    else if(countdown>60)message="2";
+    else if(countdown>0)message="1";
+    else{
+      message="GO";
+      messageTimer=40;
+      phase="playing";
+      spawnCircle();
+    }
+  }
+
+  else if(phase==="playing"){
+    timeLeft--;
+    circleLife--;
+    radius=baseRadius*(circleLife/circleLifeMax);
+
+    if(circleLife<=0){
+      combo=0;
+      spawnCircle();
+    }
+
+    if(timeLeft<=0){
+      phase="end";
+      if(score>highScore){
+        highScore=score;
+        localStorage.setItem("touchHighScore",highScore);
+        newHigh=true;
+        for(let i=0;i<8;i++){
+          createParticles(canvas.width/2,canvas.height/2,"#ff69b4");
+        }
+      }
+    }
+
+    ctx.save();
+    ctx.translate(x,y);
+    ctx.rotate(angle);
+    ctx.fillStyle=currentColor;
+    ctx.beginPath();
+    ctx.arc(0,0,radius,0,Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  updateParticles();
+  drawParticles();
+
+  ctx.font="bold 28px Arial";
+  ctx.fillStyle="#ff69b4";
+  ctx.textAlign="left";
+  ctx.fillText("Score: "+score,20,40);
+
+  ctx.textAlign="right";
+  ctx.fillText("TIME: "+Math.max(0,Math.ceil(timeLeft/60)),
+  canvas.width-20,40);
+
+  if(message!==""&&(phase==="countdown"||messageTimer>0)){
+    ctx.save();
+    ctx.translate(canvas.width/2,canvas.height/2);
+    ctx.font="bold 100px Impact";
+    ctx.textAlign="center";
+    ctx.textBaseline="middle";
+    ctx.fillStyle=messageColor;
+    ctx.shadowColor=messageGlow;
+    ctx.shadowBlur=35;
+    ctx.fillText(message,0,0);
+    ctx.restore();
+  }
+
+  if(phase==="end") drawEndScreen();
+
+  ctx.restore();
+  angle+=0.05;
+  if(messageTimer>0)messageTimer--;
+
+  requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+</body>
+</html>
